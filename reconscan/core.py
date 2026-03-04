@@ -57,8 +57,11 @@ class ReconEngine:
         endpoints, infra, technologies = classify_endpoints(parsed)
         technology_hits = parsed.get("technology_hits", [])
         auth_flows = detect_auth_flows(parsed, endpoints)
-        secrets = detect_secrets(parsed)
+        
+        # Enhanced secret detection with headers and responses
         headers = analyze_headers(responses)
+        secrets = detect_secrets(parsed, responses=responses, headers=headers)
+        
         vulns = match_vulnerabilities(technologies, technology_hits=technology_hits)
 
         behavior = []
@@ -100,7 +103,9 @@ class ReconEngine:
         endpoints, infra, technologies = classify_endpoints(parsed)
         technology_hits = parsed.get("technology_hits", [])
         auth_flows = detect_auth_flows(parsed, endpoints)
-        secrets = detect_secrets(parsed)
+        
+        # No headers/responses for JS-only scans
+        secrets = detect_secrets(parsed, responses=None, headers=None)
         vulns = match_vulnerabilities(technologies, technology_hits=technology_hits)
 
         business_flows = detect_business_flows(endpoints)
@@ -133,7 +138,7 @@ class ReconEngine:
         endpoints, infra, technologies = classify_endpoints(parsed)
         technology_hits = parsed.get("technology_hits", [])
         auth_flows = detect_auth_flows(parsed, endpoints)
-        secrets = detect_secrets(parsed)
+        secrets = detect_secrets(parsed, responses=None, headers=None)
         vulns = match_vulnerabilities(technologies, technology_hits=technology_hits)
 
         business_flows = detect_business_flows(endpoints)

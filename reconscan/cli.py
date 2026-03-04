@@ -93,19 +93,31 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     engine = ReconEngine(config=config)
 
-    if mode == "domain":
-        result = engine.scan_domain(args.target)
-    elif mode == "js_file":
-        result = engine.scan_js_file(args.js_file)
-    elif mode == "js_list":
-        with open(args.js_list, "r", encoding="utf-8") as f:
-            urls = [line.strip() for line in f if line.strip()]
-        result = engine.scan_js_urls(urls)
-    elif mode == "paste":
-        js_code = read_stdin()
-        result = engine.scan_js_snippet(js_code)
-    else:
-        raise SystemExit(f"Unknown mode: {mode}")
+    try:
+        if mode == "domain":
+            result = engine.scan_domain(args.target)
+        elif mode == "js_file":
+            # ensure the JS file exists before trying to open it
+            import os
+            if not args.js_file or not os.path.isfile(args.js_file):
+                raise SystemExit(f"JavaScript file not found: {args.js_file}")
+            result = engine.scan_js_file(args.js_file)
+        elif mode == "js_list":
+            if not os.path.isfile(args.js_list):
+                raise SystemExit(f"JS list file not found: {args.js_list}")
+            with open(args.js_list, "r", encoding="utf-8") as f:
+                urls = [line.strip() for line in f if line.strip()]
+            result = engine.scan_js_urls(urls)
+        elif mode == "paste":
+            js_code = read_stdin()
+            result = engine.scan_js_snippet(js_code)
+        else:
+            raise SystemExit(f"Unknown mode: {mode}")
+    except FileNotFoundError as e:
+        raise SystemExit(f"I/O error: {e}")
+    except Exception as e:
+        # catch unexpected errors and display a clean message
+        raise SystemExit(f"Scan failed: {e}")
 
     output_str = engine.render_report(result)
 

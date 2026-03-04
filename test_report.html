@@ -1,96 +1,9 @@
-import json
-from dataclasses import asdict, is_dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List
 
-from jinja2 import Environment, select_autoescape
-
-
-def _to_dict(obj: Any) -> Any:
-    if is_dataclass(obj):
-        return asdict(obj)
-    return obj
-
-
-def _mask_secret(value: str) -> str:
-    if not value:
-        return ""
-    if len(value) <= 12:
-        return value[:2] + "…" + value[-2:]
-    return value[:6] + "…" + value[-4:]
-
-
-def _risk_counts(risks: List[Dict[str, Any]]) -> Dict[str, int]:
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
-    for r in risks or []:
-        sev = (r.get("severity") or "INFO").upper()
-        if sev in counts:
-            counts[sev] += 1
-    return counts
-
-
-def _render_markdown(data: dict) -> str:
-    env = Environment(autoescape=False)
-    env.filters["tojson"] = lambda x: json.dumps(x, ensure_ascii=False)
-    tmpl = env.from_string(
-        """
-Recon Report
-============
-
-Target: {{ data.target }}
-
-## Technologies
-{% for t in data.technologies %}
-- {{ t }}
-{% endfor %}
-
-## Endpoints
-{% for ep in data.endpoints %}
-- {{ ep.path if ep.path is defined else ep["path"] }} ({{ ep.get("category", "unknown") }})
-{% endfor %}
-
-## Business Logic Flows
-{% for flow in data.business_flows %}
-### {{ flow.name if flow.name is defined else flow["name"] }}
-{% for p in flow.endpoints %}
-- {{ p }}
-{% endfor %}
-{% endfor %}
-
-## Risks
-{% for r in data.risks %}
-- **{{ r.severity }}** - {{ r.title }}
-{% endfor %}
-"""
-    )
-    return tmpl.render(data=data)
-
-
-def _render_html(data: dict) -> str:
-    env = Environment(autoescape=select_autoescape(enabled_extensions=("html", "xml")))
-    env.filters["tojson"] = lambda x: json.dumps(x, ensure_ascii=False)
-
-    # Precompute UI helpers
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    risks = data.get("risks", []) or []
-    counts = _risk_counts(risks)
-    data["__generated_at"] = now
-    data["__risk_counts"] = counts
-
-    # Mask secrets in-place for display (keep raw in JSON exports)
-    secrets = data.get("secrets", []) or []
-    data["__secrets_masked"] = [
-        {**s, "masked": _mask_secret(s.get("value", ""))}
-        for s in secrets
-    ]
-
-    tmpl = env.from_string(
-        """
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Recon Report - {{ data.target }}</title>
+    <title>Recon Report - https://test.example.com</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root{
@@ -457,33 +370,33 @@ def _render_html(data: dict) -> str:
         <div>
           <h1 class="title">🛡️ RECON REPORT</h1>
           <div class="subtitle">
-            <div><strong>Target:</strong> <code>{{ data.target }}</code></div>
-            <div>Generated: {{ data.__generated_at }}</div>
+            <div><strong>Target:</strong> <code>https://test.example.com</code></div>
+            <div>Generated: 2026-03-04 12:49:39 UTC</div>
           </div>
         </div>
         <div class="pill">
-          <span>Endpoints:</span> <strong>{{ (data.endpoints|length) }}</strong>
-          <span style="margin-left:10px;">Exposed Creds:</span> <strong>{{ (data.secrets|length) }}</strong>
-          <span style="margin-left:10px;">Vulns:</span> <strong>{{ (data.vulns|length) }}</strong>
+          <span>Endpoints:</span> <strong>3</strong>
+          <span style="margin-left:10px;">Exposed Creds:</span> <strong>1</strong>
+          <span style="margin-left:10px;">Vulns:</span> <strong>1</strong>
         </div>
       </div>
 
       <div class="grid" style="margin-bottom: 12px;">
         <div class="card">
           <div class="k">🔴 CRITICAL</div>
-          <div class="v" style="color: var(--crit)">{{ data.__risk_counts.CRITICAL }}</div>
+          <div class="v" style="color: var(--crit)">1</div>
         </div>
         <div class="card">
           <div class="k">🟠 HIGH</div>
-          <div class="v" style="color: var(--high)">{{ data.__risk_counts.HIGH }}</div>
+          <div class="v" style="color: var(--high)">1</div>
         </div>
         <div class="card">
           <div class="k">🟡 MEDIUM</div>
-          <div class="v" style="color: var(--med)">{{ data.__risk_counts.MEDIUM }}</div>
+          <div class="v" style="color: var(--med)">0</div>
         </div>
         <div class="card">
           <div class="k">🟢 LOW / INFO</div>
-          <div class="v" style="color: var(--info)">{{ data.__risk_counts.LOW + data.__risk_counts.INFO }}</div>
+          <div class="v" style="color: var(--info)">0</div>
         </div>
       </div>
 
@@ -507,60 +420,54 @@ def _render_html(data: dict) -> str:
             </tr>
           </thead>
           <tbody id="findingsBody">
-            {% for r in data.risks %}
-            <tr data-sev="{{ r.severity }}">
-              <td><span class="badge sev-{{ r.severity }}">{{ r.severity }}</span></td>
-              <td>{{ r.title }}</td>
-              <td class="muted"><code>{{ (r.details | tojson)[:180] }}</code></td>
+            
+            <tr data-sev="CRITICAL">
+              <td><span class="badge sev-CRITICAL">CRITICAL</span></td>
+              <td>Exposed AWS_KEY</td>
+              <td class="muted"><code>{&#34;value&#34;: &#34;AKIA1234567890ABCDEF&#34;}</code></td>
             </tr>
-            {% endfor %}
+            
+            <tr data-sev="HIGH">
+              <td><span class="badge sev-HIGH">HIGH</span></td>
+              <td>Vulnerable dependency match: lodash@3.10.1</td>
+              <td class="muted"><code>{&#34;cve&#34;: &#34;CVE-2021-23337&#34;, &#34;cisa_kev&#34;: true}</code></td>
+            </tr>
+            
           </tbody>
         </table>
       </div>
 
       <!-- EXPOSED CREDENTIALS SECTION -->
-      {% if data.__secrets_masked|length > 0 %}
+      
       <div class="credentials-container">
         <h2 style="color: #ef4444; border-bottom: 2px solid #ef4444; padding-bottom: 10px;">⚠️  EXPOSED CREDENTIALS DETECTED</h2>
         <div class="muted" style="margin-bottom: 14px; font-size: 12px;">
-          <strong>{{ data.__secrets_masked|length }}</strong> credential(s) found across JavaScript, configuration, and response data. Review and rotate immediately.
+          <strong>1</strong> credential(s) found across JavaScript, configuration, and response data. Review and rotate immediately.
         </div>
         
-        {% for s in data.__secrets_masked %}
+        
         <div class="credential-item">
-          <div class="credential-type">{{ s.type }}</div>
+          <div class="credential-type">AWS_KEY</div>
           <div class="credential-details">
-            <strong>Value:</strong> <code>{{ s.masked }}</code><br>
-            <strong>Confidence:</strong> {{ "%.0f" | format(s.get('confidence', 0.8) * 100) }}%<br>
-            <strong>Category:</strong> <span class="badge">{{ s.get('category', 'unknown') }}</span><br>
-            {% if s.get('jwt_claims') %}
-            <div class="jwt-details">
-              <strong>JWT Claims:</strong><br>
-              {{ (s.jwt_claims | tojson) }}
-            </div>
-            {% endif %}
-            <strong>Description:</strong> {{ s.get('description', 'Exposed credential') }}
+            <strong>Value:</strong> <code>AKIA12…CDEF</code><br>
+            <strong>Confidence:</strong> 95%<br>
+            <strong>Category:</strong> <span class="badge">unknown</span><br>
+            
+            <strong>Description:</strong> Exposed credential
           </div>
           <div class="credential-severity">
-            <span class="badge sev-{{ s.get('severity', 'HIGH') }}">{{ s.get('severity', 'HIGH') }}</span>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">{{ s.get('source', 'unknown') }}</div>
+            <span class="badge sev-HIGH">HIGH</span>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">unknown</div>
           </div>
         </div>
-        {% endfor %}
+        
       </div>
-      {% else %}
-      <div class="panel">
-        <h2>🔐 Exposed Credentials</h2>
-        <div class="muted">✅ No exposed credentials detected.</div>
-      </div>
-      {% endif %}
+      
 
       <div class="two-col">
         <div class="panel">
           <h2>Vulnerability Matches (JS Tech)</h2>
-          {% if data.vulns|length == 0 %}
-            <div class="muted">No library matches found in the built-in vulnerability matcher.</div>
-          {% else %}
+          
           <table>
             <thead>
               <tr>
@@ -572,58 +479,35 @@ def _render_html(data: dict) -> str:
               </tr>
             </thead>
             <tbody>
-              {% for v in data.vulns %}
+              
               <tr>
-                <td>{{ v.technology_instance }}</td>
-                <td><code>{{ v.cve }}</code></td>
-                <td><span class="badge sev-{{ v.severity }}">{{ v.severity }}</span></td>
-                <td>{{ "Yes" if v.cisa_kev else "No" }}</td>
+                <td>lodash@3.10.1</td>
+                <td><code>CVE-2021-23337</code></td>
+                <td><span class="badge sev-HIGH">HIGH</span></td>
+                <td>Yes</td>
                 <td class="muted">
-                  {% if v.sources %}
-                    {{ v.sources|join(", ") }}
-                  {% else %}
-                    <span class="muted">unknown source</span>
-                  {% endif %}
+                  
+                    package.json
+                  
                 </td>
               </tr>
-              {% endfor %}
+              
             </tbody>
           </table>
-          {% endif %}
+          
         </div>
       </div>
 
       <div class="panel" style="margin-top: 12px;">
         <h2>Technologies (with Evidence)</h2>
-        {% if data.technology_hits is defined and data.technology_hits|length > 0 %}
-        <table>
-          <thead>
-            <tr>
-              <th>Technology</th>
-              <th>Source</th>
-              <th>Evidence</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for th in data.technology_hits %}
-            <tr>
-              <td>{{ th.technology }}</td>
-              <td class="muted">{{ th.source }}</td>
-              <td class="muted"><code>{{ th.evidence }}</code></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
+        
           <div class="muted">No technology signatures detected from JavaScript.</div>
-        {% endif %}
+        
       </div>
 
       <div class="panel" style="margin-top: 12px;">
         <h2>Endpoints</h2>
-        {% if data.endpoints|length == 0 %}
-          <div class="muted">No endpoints extracted from JavaScript.</div>
-        {% else %}
+        
         <table>
           <thead>
             <tr>
@@ -633,105 +517,59 @@ def _render_html(data: dict) -> str:
             </tr>
           </thead>
           <tbody>
-            {% for ep in data.endpoints %}
+            
             <tr>
-              <td><code>{{ ep.path }}</code></td>
-              <td><span class="badge sev-INFO">{{ ep.category }}</span></td>
-              <td class="muted">{{ ep.source }}</td>
+              <td><code>/api/users</code></td>
+              <td><span class="badge sev-INFO">api</span></td>
+              <td class="muted">js</td>
             </tr>
-            {% endfor %}
+            
+            <tr>
+              <td><code>/api/admin</code></td>
+              <td><span class="badge sev-INFO">admin</span></td>
+              <td class="muted">js</td>
+            </tr>
+            
+            <tr>
+              <td><code>/debug</code></td>
+              <td><span class="badge sev-INFO">debug</span></td>
+              <td class="muted">js</td>
+            </tr>
+            
           </tbody>
         </table>
-        {% endif %}
+        
       </div>
 
       <div class="two-col" style="margin-top: 12px;">
         <div class="panel">
           <h2>Business Logic Flows</h2>
-          {% if data.business_flows|length == 0 %}
+          
             <div class="muted">No flows detected from endpoint naming patterns.</div>
-          {% else %}
-            {% for flow in data.business_flows %}
-            <details style="margin-bottom: 10px;" {% if loop.index0 < 2 %}open{% endif %}>
-              <summary>{{ flow.name }} <span class="muted">({{ flow.endpoints|length }})</span></summary>
-              <div class="content">
-                <ul>
-                  {% for p in flow.endpoints %}
-                  <li><code>{{ p }}</code></li>
-                  {% endfor %}
-                </ul>
-              </div>
-            </details>
-            {% endfor %}
-          {% endif %}
+          
         </div>
 
         <div class="panel">
           <h2>Endpoint Behavior Probing</h2>
-          {% if data.behavior|length == 0 %}
+          
             <div class="muted">No probing results (run with <code>--probe</code>).</div>
-          {% else %}
-          <table>
-            <thead>
-              <tr>
-                <th>Endpoint</th>
-                <th>HEAD</th>
-                <th>GET</th>
-                <th>Auth?</th>
-                <th>Redirects</th>
-                <th>Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for b in data.behavior %}
-              <tr>
-                <td><code>{{ b.path }}</code></td>
-                <td>{{ b.head_status }}</td>
-                <td>{{ b.get_status }}</td>
-                <td>{{ "Yes" if b.auth_required else "No" }}</td>
-                <td class="muted">{{ b.redirects|length }}</td>
-                <td class="muted">{{ b.risk if b.risk else "" }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {% endif %}
+          
         </div>
       </div>
 
       <div class="two-col" style="margin-top: 12px;">
         <div class="panel">
           <h2>HTTP Header Issues</h2>
-          {% if not data.headers or (data.headers.header_issues|length == 0) %}
+          
             <div class="muted">No header issues captured (or scan was JS-only).</div>
-          {% else %}
-          <table>
-            <thead>
-              <tr><th>URL</th><th>Issue</th></tr>
-            </thead>
-            <tbody>
-              {% for hi in data.headers.header_issues %}
-              <tr>
-                <td class="muted">{{ hi.url }}</td>
-                <td class="muted"><code>{{ hi | tojson }}</code></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          {% endif %}
+          
         </div>
 
         <div class="panel">
           <h2>API Surface Graph</h2>
-          {% if data.api_graph.relationships is defined and data.api_graph.relationships|length > 0 %}
-            <ul>
-              {% for rel in data.api_graph.relationships %}
-              <li><code>{{ rel.from }}</code> &rarr; <code>{{ rel.to }}</code> <span class="muted">({{ rel.type }})</span></li>
-              {% endfor %}
-            </ul>
-          {% else %}
+          
             <div class="muted">No relationships inferred (graph still includes node lists in JSON format).</div>
-          {% endif %}
+          
         </div>
       </div>
 
@@ -757,20 +595,3 @@ def _render_html(data: dict) -> str:
     </script>
   </body>
 </html>
-"""
-    )
-    return tmpl.render(data=data)
-
-
-def generate_report(result: Any, report_format: str = "json") -> str:
-    data = _to_dict(result)
-
-    if report_format == "json":
-        return json.dumps(data, indent=2)
-    if report_format == "md":
-        return _render_markdown(data)
-    if report_format == "html":
-        return _render_html(data)
-
-    return json.dumps(data, indent=2)
-
