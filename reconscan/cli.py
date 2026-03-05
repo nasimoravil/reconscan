@@ -127,6 +127,21 @@ def determine_mode(args: argparse.Namespace) -> str:
     raise SystemExit("No input mode specified. Provide a target, --js, --js-list, or --paste.")
 
 
+def print_banner() -> None:
+    """Print the reconscan ASCII art banner."""
+    banner = """
+XXXXXX                       XXX    XX                               
+XX  XX                       XXXXX  XX  XXXXX                        
+XX  XX  XXXXXX XXXXXX XXXXXX XX  XX XX XX       XXXX   XXXX  XXXX    
+XXXXX   XXXXXX X      X   XXXXX   XXXX XXXXXX  XX     XX  X  XX XX   
+XX  XX  X      X      X   XXXXX     XX       X XX     X   X  XX  X   
+XX  XXX XXXXXX XXXXXX XXXXXX XX     XX XXXXXXX XXXXXX XXXXXX XX  XXXX 
+    """
+    print(banner)
+    print("Advanced Web & JavaScript Reconnaissance Tool", file=sys.stderr)
+    print("=" * 70, file=sys.stderr)
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     """Main entry point for the CLI.
     
@@ -144,6 +159,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     Raises:
         SystemExit: On any fatal error (missing files, invalid input, scan failure)
     """
+    # Display banner on CLI startup
+    print_banner()
+    
     parser = build_parser()
     args = parser.parse_args(argv)
 
