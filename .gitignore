@@ -1,0 +1,36 @@
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Generated reports and temporary files
+*.html
+*.zip
+*.pdf
+test_*.py
+dummy.*
+
+# Cache
+.pytest_cache/
+.coverage
+htmlcov/

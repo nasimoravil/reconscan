@@ -1,7 +1,36 @@
+"""API endpoint and infrastructure detection module.
+
+Classifies extracted endpoints by type and category (admin, auth, payment, etc.)
+to help identify critical and sensitive API surfaces.
+
+This module provides rule-based classification without machine learning.
+"""
+
 from typing import Any, Dict, List, Tuple
 
 
 def _categorize_endpoint(path: str) -> str:
+    """Classify endpoint path into a semantic category.
+    
+    Uses keyword matching on the endpoint path to determine its likely purpose
+    (admin panel, authentication, payment processing, etc.).
+    
+    Categories:
+    - admin: Administrative interface
+    - auth: Authentication/login functionality
+    - debug: Debug or developer tools
+    - internal: Internal-only services
+    - payment: Payment processing
+    - password_reset: Account recovery
+    - account: User profile/account management
+    - generic: Generic API endpoint
+    
+    Args:
+        path: The API endpoint path (e.g., '/api/admin/users')
+    
+    Returns:
+        Category string for the endpoint
+    """
     lower = path.lower()
     if "admin" in lower:
         return "admin"
@@ -21,9 +50,20 @@ def _categorize_endpoint(path: str) -> str:
 
 
 def classify_endpoints(parsed: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[str]]:
-    """
-    Apply rule-based classification to endpoints discovered in JS.
-    Returns (endpoints, infra, technologies).
+    """Classify discovered API endpoints by type and category.
+    
+    Takes parsed JavaScript data containing raw endpoints and applies
+    semantic categorization to identify endpoint purposes and risk levels.
+    
+    Args:
+        parsed: Dictionary containing parsed JS data:
+            - endpoints: List of discovered endpoint dicts
+            - infra: List of infrastructure indicators
+            - technologies: List of detected framework/library names
+    
+    Returns:
+        Tuple of (endpoints, infra, technologies) where endpoints are
+        enhanced with category classification
     """
     endpoints: List[Dict[str, Any]] = []
     for ep in parsed.get("endpoints", []):

@@ -92,6 +92,8 @@ def _render_html(data: dict) -> str:
     <meta charset="utf-8" />
     <title>Recon Report - {{ data.target }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Tabler CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tabler@1.0.0/dist/css/tabler.min.css" rel="stylesheet" />
     <style>
       :root{
         --bg: #0a0e27;
@@ -398,6 +400,18 @@ def _render_html(data: dict) -> str:
         text-align: right;
       }
 
+      /* credential probe result styles */
+      .credential-test-valid {
+        color: #ef4444;
+        font-weight: 700;
+        margin-top: 6px;
+      }
+      .credential-test-info {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
       .jwt-details {
         background: rgba(16,124,16,0.04);
         border: 1px solid var(--xbox-wave-grey);
@@ -449,10 +463,79 @@ def _render_html(data: dict) -> str:
         margin: 6px 0;
         line-height: 1.6;
       }
+
+      /* Scrollable secrets container */
+      .secrets-scroll-container {
+        max-height: 600px;
+        overflow-y: auto;
+        border: 2px solid var(--xbox-wave-grey);
+        border-radius: 10px;
+        padding: 12px;
+        background: rgba(61,61,61,0.4);
+        backdrop-filter: blur(10px);
+      }
+      
+      .secrets-scroll-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      .secrets-scroll-container::-webkit-scrollbar-track {
+        background: rgba(16,124,16,0.1);
+        border-radius: 8px;
+      }
+      
+      .secrets-scroll-container::-webkit-scrollbar-thumb {
+        background: var(--xbox-green);
+        border-radius: 8px;
+      }
+      
+      .secrets-scroll-container::-webkit-scrollbar-thumb:hover {
+        background: var(--xbox-green-light);
+      }
+
+      .copy-button {
+        background: linear-gradient(135deg, rgba(16,124,16,0.15) 0%, rgba(16,124,16,0.08) 100%);
+        border: 1px solid var(--xbox-green);
+        color: var(--xbox-green-light);
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        margin-left: 8px;
+      }
+      
+      .copy-button:hover {
+        background: linear-gradient(135deg, rgba(16,124,16,0.25) 0%, rgba(16,124,16,0.15) 100%);
+        transform: translateY(-1px);
+      }
+      
+      .copy-button.copied {
+        background: rgba(34,197,94,0.2);
+        border-color: var(--low);
+        color: var(--low);
+      }
+
+      .full-value-display {
+        background: rgba(0,0,0,0.6);
+        border: 1px solid var(--xbox-wave-grey);
+        border-radius: 6px;
+        padding: 10px;
+        margin-top: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: var(--xbox-green-light);
+        word-break: break-all;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
     </style>
   </head>
-  <body>
-    <div class="container">
+  <body class="antialiased">
+    <div class="page">
+      <div class="page-main">
+        <div class="container-xl">
       <div class="header">
         <div>
           <h1 class="title">🛡️ RECON REPORT</h1>
@@ -468,22 +551,30 @@ def _render_html(data: dict) -> str:
         </div>
       </div>
 
-      <div class="grid" style="margin-bottom: 12px;">
-        <div class="card">
-          <div class="k">🔴 CRITICAL</div>
-          <div class="v" style="color: var(--crit)">{{ data.__risk_counts.CRITICAL }}</div>
+      <div class="row row-deck" style="margin-bottom: 12px;">
+        <div class="col-sm-6 col-lg-3">
+          <div class="card card-bordered">
+            <div class="k">🔴 CRITICAL</div>
+            <div class="v" style="color: var(--crit)">{{ data.__risk_counts.CRITICAL }}</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="k">🟠 HIGH</div>
-          <div class="v" style="color: var(--high)">{{ data.__risk_counts.HIGH }}</div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card card-bordered">
+            <div class="k">🟠 HIGH</div>
+            <div class="v" style="color: var(--high)">{{ data.__risk_counts.HIGH }}</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="k">🟡 MEDIUM</div>
-          <div class="v" style="color: var(--med)">{{ data.__risk_counts.MEDIUM }}</div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card card-bordered">
+            <div class="k">🟡 MEDIUM</div>
+            <div class="v" style="color: var(--med)">{{ data.__risk_counts.MEDIUM }}</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="k">🟢 LOW / INFO</div>
-          <div class="v" style="color: var(--info)">{{ data.__risk_counts.LOW + data.__risk_counts.INFO }}</div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card card-bordered">
+            <div class="k">🟢 LOW / INFO</div>
+            <div class="v" style="color: var(--info)">{{ data.__risk_counts.LOW + data.__risk_counts.INFO }}</div>
+          </div>
         </div>
       </div>
 
@@ -526,27 +617,53 @@ def _render_html(data: dict) -> str:
           <strong>{{ data.__secrets_masked|length }}</strong> credential(s) found across JavaScript, configuration, and response data. Review and rotate immediately.
         </div>
         
-        {% for s in data.__secrets_masked %}
-        <div class="credential-item">
-          <div class="credential-type">{{ s.type }}</div>
-          <div class="credential-details">
-            <strong>Value:</strong> <code>{{ s.masked }}</code><br>
-            <strong>Confidence:</strong> {{ "%.0f" | format(s.get('confidence', 0.8) * 100) }}%<br>
-            <strong>Category:</strong> <span class="badge">{{ s.get('category', 'unknown') }}</span><br>
-            {% if s.get('jwt_claims') %}
-            <div class="jwt-details">
-              <strong>JWT Claims:</strong><br>
-              {{ (s.jwt_claims | tojson) }}
+        <div class="secrets-scroll-container">
+          {% for s in data.__secrets_masked %}
+          <div class="credential-item">
+            <div class="credential-type">{{ s.type }}</div>
+            <div class="credential-details">
+              <strong>Value:</strong> <code>{{ s.masked }}</code>
+              <button class="copy-button" data-secret="{{ s.value }}">📋 Copy</button>
+              <br>
+              <strong>Confidence:</strong> {{ "%.0f" | format(s.get('confidence', 0.8) * 100) }}%<br>
+              <strong>Category:</strong> <span class="badge">{{ s.get('category', 'unknown') }}</span><br>
+              {% if s.get('jwt_claims') %}
+              <details style="margin-top: 8px;">
+                <summary style="color: var(--xbox-green-light); font-weight: 600; cursor: pointer;">JWT Claims</summary>
+                <div class="jwt-details">
+                  {{ (s.jwt_claims | tojson) }}
+                </div>
+              </details>
+              {% endif %}
+              <strong>Description:</strong> {{ s.get('description', 'Exposed credential') }}
+              
+              <!-- Full Value Display -->
+              <div class="full-value-display">
+                <strong>Full Secret Value:</strong><br>
+                {{ s.value }}
+              </div>
+              
+              {% if s.valid %}
+              <div class="credential-test-valid">⚠️ Probe succeeded (status {{ s.test_status }}{% if s.test_method %} via {{ s.test_method }}{% endif %})</div>
+              {% if s.test_message %}
+              <div class="credential-test-info">{{ s.test_message }}</div>
+              {% endif %}
+              {% if s.test_excerpt %}
+              <div class="credential-test-info"><strong>Response Excerpt:</strong><br><code style="display: block; padding: 8px; background: rgba(0,0,0,0.8); border-radius: 4px; margin-top: 4px;">{{ s.test_excerpt }}</code></div>
+              {% endif %}
+              {% elif s.tested %}
+              <div class="credential-test-info">Tested; status {{ s.test_status }}{% if s.test_method %} via {{ s.test_method }}{% endif %}</div>
+              {% elif s.test_message %}
+              <div class="credential-test-info">Probe note: {{ s.test_message }}</div>
+              {% endif %}
             </div>
-            {% endif %}
-            <strong>Description:</strong> {{ s.get('description', 'Exposed credential') }}
+            <div class="credential-severity">
+              <span class="badge sev-{{ s.get('severity', 'HIGH') }}">{{ s.get('severity', 'HIGH') }}</span>
+              <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">{{ s.get('source', 'unknown') }}</div>
+            </div>
           </div>
-          <div class="credential-severity">
-            <span class="badge sev-{{ s.get('severity', 'HIGH') }}">{{ s.get('severity', 'HIGH') }}</span>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">{{ s.get('source', 'unknown') }}</div>
-          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
       {% else %}
       <div class="panel">
@@ -738,9 +855,43 @@ def _render_html(data: dict) -> str:
       <div class="muted" style="margin-top: 14px;">
         Report is rule-based and deterministic. Always validate findings manually before exploitation.
       </div>
-    </div>
+    </div> <!-- container-xl -->
+  </div> <!-- page-main -->
+</div> <!-- page -->
 
+    <script src="https://cdn.jsdelivr.net/npm/tabler@1.0.0/dist/js/tabler.min.js"></script>
     <script>
+      /**
+       * Copy secret value to clipboard with visual feedback
+       * Shows a temporary "Copied" indicator on the button
+       */
+      function copySecret(button) {
+        const secretValue = button.getAttribute('data-secret');
+        navigator.clipboard.writeText(secretValue).then(() => {
+          const originalText = button.textContent;
+          button.textContent = '✓ Copied!';
+          button.classList.add('copied');
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('copied');
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          alert('Failed to copy. Check browser console.');
+        });
+      }
+      
+      // Attach click handlers to all copy buttons
+      document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.copy-button').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            copySecret(btn);
+          });
+        });
+      });
+      
+      // Risk findings filter functionality
       (function(){
         const checks = Array.from(document.querySelectorAll('input[data-sev]'));
         const body = document.getElementById('findingsBody');
